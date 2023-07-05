@@ -1,0 +1,67 @@
+version: '3.1'
+
+services:
+
+  postgres:
+    build:
+      context: internal/postgres
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - '5432:5432'
+    expose:
+      - '5432'
+    environment:
+      POSTGRES_PASSWORD: example
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    expose:
+      - '2181'
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - '9092:9092'
+    expose:
+      - '29092'
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  notifier:
+    build:
+      dockerfile: Dockerfile
+      context: services/notifier
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    environment:
+      ENDPOINT: https://enczcbi39ybms.x.pipedream.net
+      KAFKA_ADDR: kafka:29092
+
+  certificate:
+    build:
+      dockerfile: Dockerfile
+      context: services/certificate
+    ports:
+      - '8080:8080'
+    restart: unless-stopped
+    depends_on:
+      - kafka
+      - postgres
+    environment:
+      PORT: 8080
+      KAFKA_ADDR: kafka:29092
+
+
+
